@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Envoyer à Jeff</title>
+<style>
+  :root{ --neon:#39ff14; --pink:#ff2bd6; --blue:#00e5ff; --bg:#02010a; }
+  html,body{height:100%}
+  body{ margin:0; background:
+      radial-gradient(1200px 600px at 50% 20%, rgba(0,229,255,.15), transparent 60%),
+      radial-gradient(900px 500px at 20% 80%, rgba(255,43,214,.12), transparent 60%),
+      radial-gradient(700px 400px at 80% 70%, rgba(57,255,20,.12), transparent 60%),
+      var(--bg);
+    color:#fff; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    overflow:hidden; touch-action: manipulation; }
+  .stickers{position:fixed; inset:0; overflow:hidden; pointer-events:none}
+  .st{ position:absolute; width:18vw; max-width:110px; aspect-ratio:1; background-size:cover; background-position:center;
+       filter: drop-shadow(0 0 12px rgba(0,229,255,.35)) hue-rotate(var(--h,0deg));
+       transform: rotate(var(--r,0deg)) scale(1); opacity:.5; }
+  .fast-spin{ animation: fastspin 0.5s linear infinite; }
+  @keyframes fastspin{ from{ transform:rotate(0deg); } to{ transform:rotate(360deg); } }
+  .stage{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; }
+  .face{ width:62vw; max-width:340px; aspect-ratio:1; border-radius:50%;
+    background-size:cover; background-position:center; border:3px solid rgba(255,255,255,.12);
+    box-shadow: 0 0 24px rgba(0,229,255,.35), 0 0 80px rgba(255,43,214,.25);
+    position:relative; cursor:pointer; }
+  .spin{ animation: spin 12s linear infinite; }
+  @keyframes spin{ from{ transform:rotate(0deg); } to{ transform:rotate(360deg); } }
+  .record{ animation: pulse 1.2s infinite; box-shadow: 0 0 32px var(--pink), 0 0 140px rgba(255,43,214,.5); border-color: rgba(255,43,214,.6); }
+  @keyframes pulse{ 0%{transform:scale(1)} 50%{transform:scale(1.03)} 100%{transform:scale(1)} }
+  .mic-hint{ position:absolute; inset:0; display:grid; place-items:center; pointer-events:none; }
+  .mic-hint span{ font-size:clamp(36px,10vw,64px); filter: drop-shadow(0 0 10px rgba(0,229,255,.9)) drop-shadow(0 0 24px rgba(255,43,214,.7)); }
+  .mic-hint.pulse span{ animation: micpulse 1.2s infinite; }
+  @keyframes micpulse{ 0%{transform:scale(1)} 50%{transform:scale(1.12)} 100%{transform:scale(1)} }
+  .timer{ position:fixed; top:8vh; left:50%; transform:translateX(-50%);
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: clamp(28px, 8vw, 56px);
+    text-shadow: 0 0 6px var(--neon), 0 0 12px var(--neon), 0 0 28px var(--neon);
+    color:#cfffcc; letter-spacing:.04em; opacity:0; transition:opacity .2s ease; }
+  .timer.on{opacity:1}
+  .controls{ position:fixed; left:50%; bottom:20vh; transform:translateX(-50%);
+    display:flex; gap:20px; align-items:center; justify-content:center; }
+  .btn{ width:64px; height:64px; border-radius:50%; border:none; background:transparent; cursor:pointer;
+    display:grid; place-items:center; box-shadow:0 0 18px rgba(0,229,255,.35); }
+  .btn svg{ width:34px; height:34px; fill:#fff; filter: drop-shadow(0 0 8px rgba(0,229,255,.7)); }
+  .btn:active{ transform: scale(.96); }
+  .send{ position:fixed; left:50%; bottom:6vh; transform:translateX(-50%);
+    padding: 14px 24px; border-radius:999px; border:2px solid rgba(255,255,255,.2); background:rgba(0,0,0,.2);
+    color:#fff; font-weight:800; font-size:18px; letter-spacing:.02em;
+    text-shadow: 0 0 6px var(--blue), 0 0 22px var(--blue);
+    box-shadow: inset 0 0 18px rgba(0,229,255,.25), 0 0 24px rgba(0,229,255,.25), 0 0 80px rgba(255,43,214,.25);
+    backdrop-filter: blur(6px); }
+  .merci{ position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); font-size:clamp(32px,10vw,80px);
+    font-weight:900; color:#fff; text-shadow:0 0 8px var(--pink),0 0 22px var(--pink),0 0 48px var(--pink);
+    display:none; z-index:999; }
+  audio{ display:none }
+</style>
+</head>
+<body>
+  <div class="stickers" id="stickers"></div>
+  <div class="timer" id="timer">00:00</div>
+  <div class="stage">
+    <div id="face" class="face spin">
+      <div id="micHint" class="mic-hint"><span id="micEmoji">🎤</span></div>
+    </div>
+  </div>
+  <div class="controls" id="controls" style="display:none">
+    <button class="btn" id="play"><span style="font-size:28px">▶️</span></button>
+    <button class="btn" id="redo"><span style="font-size:28px">🔄</span></button>
+  </div>
+  <audio id="player"></audio>
+  <button class="send" id="send" style="display:none">Envoyer à Jeff</button>
+  <div class="merci" id="merci">Merci ❤️</div>
+
+<script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
+<script type="module">
+  import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+
+  const SUPABASE_URL = "https://nnmplchiwxsthxhwxica.supabase.co";
+  const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ubXBsY2hpd3hzdGh4aHd4aWNhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ1OTI2ODcsImV4cCI6MjA3MDE2ODY4N30.WLw4rb2kp9fzuKGBAIw1QG8pgDn9Ll1AFJ0WKjU5GR8";
+  const SUPABASE_BUCKET = "voice-messages";
+
+  const face = document.getElementById('face');
+  const micHint = document.getElementById('micHint');
+  const timerEl = document.getElementById('timer');
+  const player = document.getElementById('player');
+  const controls = document.getElementById('controls');
+  const playBtn = document.getElementById('play');
+  const redoBtn = document.getElementById('redo');
+  const sendBtn = document.getElementById('send');
+  const stickers = document.getElementById('stickers');
+  const merci = document.getElementById('merci');
+
+  const FACE_URL = "https://nnmplchiwxsthxhwxica.supabase.co/storage/v1/object/public/voice-messages/Design_sans_titre-removebg-preview.png";
+  face.style.backgroundImage = `url('${FACE_URL}')`;
+  const COUNT = 18;
+  for(let i=0;i<COUNT;i++){
+    const d = document.createElement('div');
+    d.className='st';
+    d.style.setProperty('--h', `${(i*23)%360}deg`);
+    d.style.setProperty('--r', `${(i*17)%360}deg`);
+    d.style.left = Math.random()*100 + 'vw';
+    d.style.top = Math.random()*100 + 'vh';
+    d.style.backgroundImage = `url('${FACE_URL}')`;
+    stickers.appendChild(d);
+  }
+
+  let recording=false, raf, t0=0, hasRecorded=false;
+  const st = { ctx:null, src:null, proc:null, stream:null, sr:44100, chunks:[], blob:null, url:'' };
+
+  const fmt = (s)=>{ s=Math.floor(Math.max(0,s)); const m=String(Math.floor(s/60)).padStart(2,'0'); const ss=String(s%60).padStart(2,'0'); return `${m}:${ss}`; };
+  function tick(){ if(!recording) return; timerEl.textContent = fmt((performance.now()-t0)/1000); raf = requestAnimationFrame(tick); }
+
+  function floatTo16(a){ const o=new Int16Array(a.length); for(let i=0;i<a.length;i++){ const v=Math.max(-1,Math.min(1,a[i])); o[i]=v<0?v*0x8000:v*0x7fff; } return o; }
+  function encodeMp3(bufs, sr, kbps=128){ const left = bufs[0]; const enc = new lamejs.Mp3Encoder(1, sr, kbps);
+    const bs = 1152; const out=[]; for(let i=0;i<left.length;i+=bs){ const c = left.subarray(i, i+bs); const b = enc.encodeBuffer(floatTo16(c)); if(b.length) out.push(b); }
+    const end=enc.flush(); if(end.length) out.push(end); return new Blob(out,{type:'audio/mpeg'}); }
+
+  async function startRec(){
+    const micEmojiEl = document.getElementById('micEmoji');
+    micEmojiEl.textContent = '⏯️';
+    micHint.style.display = 'grid';
+    micHint.classList.add('pulse');
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    const Ctx = window.AudioContext || window.webkitAudioContext; const ctx = new Ctx();
+    st.sr = ctx.sampleRate; const src = ctx.createMediaStreamSource(stream); const proc = ctx.createScriptProcessor(4096,1,1);
+    st.chunks=[]; proc.onaudioprocess = (e)=>{ st.chunks.push(new Float32Array(e.inputBuffer.getChannelData(0))); };
+    src.connect(proc); proc.connect(ctx.destination); st.ctx=ctx; st.src=src; st.proc=proc; st.stream=stream;
+    recording=true; t0=performance.now(); timerEl.classList.add('on'); face.classList.remove('spin'); face.classList.add('record');  tick();
+  }
+  async function stopRec(){
+    micHint.style.display = 'none';
+    micHint.classList.remove('pulse');
+    recording=false; cancelAnimationFrame(raf);
+    try{ st.proc && st.proc.disconnect(); st.src && st.src.disconnect(); st.ctx && st.ctx.close(); st.stream && st.stream.getTracks().forEach(t=>t.stop()); }catch(e){}
+    face.classList.remove('record'); timerEl.classList.remove('on'); face.classList.add('spin');
+    const total = st.chunks.reduce((a,c)=>a+c.length,0); const merged = new Float32Array(total);
+    let off=0; for(const c of st.chunks){ merged.set(c,off); off+=c.length; }
+    const blob = encodeMp3([merged], st.sr, 128); st.blob = blob; st.url = URL.createObjectURL(blob); player.src = st.url;
+    controls.style.display='flex'; sendBtn.style.display='block'; hasRecorded=true;
+  }
+
+  face.addEventListener('click', async ()=>{ if(!recording && !hasRecorded) await startRec(); else if(recording) await stopRec(); });
+
+  let playing=false;
+  const refreshIcon = ()=>{ playBtn.innerHTML = playing ? '<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>'; };
+  playBtn.addEventListener('click', async ()=>{ if(!st.url) return; if(!playing){ await player.play(); playing=true; } else{ player.pause(); playing=false; } refreshIcon(); });
+  player.addEventListener('ended', ()=>{ playing=false; refreshIcon(); });
+
+  redoBtn.addEventListener('click', async ()=>{ st.blob=null; st.url=''; player.src=''; controls.style.display='none'; sendBtn.style.display='none'; hasRecorded=false; await startRec(); });
+
+  sendBtn.addEventListener('click', async ()=>{ if(!st.blob) return;
+    const ts = new Date().toISOString().replace(/[:.]/g,'-'); const file = new File([st.blob], `utmb-${ts}.mp3`, {type:'audio/mpeg'});
+    try{ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+      const path = `utmb/${ts}.mp3`; const { error } = await supabase.storage.from(SUPABASE_BUCKET).upload(path, file, { contentType:'audio/mpeg', upsert:false });
+      if(error) throw error;
+      // Celebration
+      document.querySelectorAll('.st').forEach(el=>el.classList.add('fast-spin'));
+      face.classList.add('fast-spin');
+      merci.style.display='block';
+      // Hide all buttons
+      sendBtn.style.display='none';
+      controls.style.display='none';
+      face.style.pointerEvents='none';
+    }catch(e){ alert('Échec de l\'envoi: '+(e.message||e)); }
+  });
+</script>
+</body>
+</html>
